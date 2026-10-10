@@ -42,6 +42,15 @@ const c1=await connect(a.cookie),c2=await connect(a.cookie);const ready=c1.messa
 c1.ws.send(JSON.stringify({type:'operation',operationId:randomUUID(),expectedVersion:ready.version,command:{action:'scene',nodes:[node],edges:[]}}));
 const operation=await until(()=>c2.messages.find(m=>m.type==='operation'));assert.equal(operation.command.nodes[0].content,'Saved to D1');
 c1.ws.close();c2.ws.close();
+// Email verification is disabled; invitations still require the matching account and a valid token.
+r=await request(`/api/projects/${project}/invites`,{cookie:a.cookie,body:{email:b.email,role:'commenter'}});assert.equal(r.response.status,200,JSON.stringify(r.data));
+const inviteToken=new URL(r.data.url).pathname.split('/').pop();
+r=await request(`/api/invites/${inviteToken}`,{body:{}});assert.equal(r.response.status,401);
+r=await request(`/api/invites/${inviteToken}`,{cookie:a.cookie,body:{}});assert.equal(r.response.status,410);
+r=await request(`/api/invites/${inviteToken}`,{cookie:b.cookie,body:{}});assert.equal(r.response.status,200,JSON.stringify(r.data));assert.equal(r.data.projectId,project);
+r=await request(`/api/invites/${inviteToken}`,{cookie:b.cookie,body:{}});assert.equal(r.response.status,410);
+r=await request(`/api/projects/${project}/scene`,{cookie:b.cookie});assert.equal(r.response.status,200);
+r=await request(`/api/projects/${project}/scene`,{cookie:b.cookie,method:'PUT',body:{nodes:[],edges:[]}});assert.equal(r.response.status,403);
 r=await request('/api/auth/logout',{cookie:a.cookie,body:{}});assert.equal(r.response.status,200);
 r=await request('/api/projects',{cookie:a.cookie});assert.equal(r.response.status,401);
-console.log('Cloudflare smoke: login, project isolation, snapshots, history, viewport, comments, R2 signed URLs/ranges, WebSocket collaboration, session revocation passed.');
+console.log('Cloudflare smoke: login, project isolation, snapshots, history, viewport, comments, R2 signed URLs/ranges, WebSocket collaboration, unverified email invitations with role enforcement, session revocation passed.');
