@@ -1708,7 +1708,17 @@ function LayersPanel() {
           return rows.map(([n,depth]) => (
           <button
             key={n.id}
-            onClick={() => s.setSelected([n.id])}
+            onClick={(event) => {
+              event.stopPropagation();
+              const surface = event.currentTarget.closest(".canvas-grid");
+              if (!surface) { s.setSelected([n.id]); return; }
+              const { width, height } = surface.getBoundingClientRect();
+              const angle = n.rotation * Math.PI / 180;
+              const boundsWidth = Math.abs(n.width * Math.cos(angle)) + Math.abs(n.height * Math.sin(angle));
+              const boundsHeight = Math.abs(n.width * Math.sin(angle)) + Math.abs(n.height * Math.cos(angle));
+              const zoom = Math.max(0.25, Math.min(1.5, Math.max(1, width - 160) / Math.max(1, boundsWidth), Math.max(1, height - 160) / Math.max(1, boundsHeight)));
+              useCanvas.setState({ selected: [n.id], zoom, pan: { x: width / 2 - (n.x + n.width / 2) * zoom, y: height / 2 - (n.y + n.height / 2) * zoom } });
+            }}
             className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs ${s.selected.includes(n.id) ? "bg-(--accent-tint)" : "hover:bg-(--bg)"}`}
             style={depth?{paddingLeft:8+depth*18}:undefined}
           >
