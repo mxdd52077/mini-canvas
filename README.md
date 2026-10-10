@@ -118,6 +118,7 @@ Web、API、素材访问与协作共用站点域名，无需额外 WebSocket 服
 | --- | --- |
 | `ASSET_SIGNING_KEY` | 素材签名密钥，必填 |
 | `SITE_URL` | 站点公开地址，用于素材与邀请链接 |
+| `MODEL_SYNC_TOKEN` | 模型目录同步接口的独立服务端令牌；管理员也可发起同步 |
 | `SEEDANCE_API_KEY` | Seedance 图片、视频、音频、模型目录与默认助手 |
 | `KIMI_API_KEY` | 可选；助手单独使用的 API Key，留空复用 Seedance Key |
 | `KIMI_BASE_URL` | 助手接口地址，默认 `https://api.seedance.nz/v1` |

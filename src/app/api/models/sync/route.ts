@@ -6,7 +6,7 @@ import { syncSeedanceCatalog } from "@/lib/seedance-catalog";
 export const dynamic = "force-dynamic";
 
 function hasSchedulerAccess(request: Request) {
-  const expected = process.env.SUPABASE_SECRET_KEY || "";
+  const expected = process.env.MODEL_SYNC_TOKEN || "";
   const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
   const left = Buffer.from(expected);
   const right = Buffer.from(supplied);
