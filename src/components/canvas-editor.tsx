@@ -1042,7 +1042,8 @@ function NodeView({
   const compatibleModels=useMemo(()=>generationKind?compatibleCatalog(modelCatalog,generationKind,inputCounts):[],[generationKind,modelCatalog,inputCounts]);
   useEffect(()=>{
     if(!generationKind||!modelCatalog.length||!compatibleModels.length)return;
-    if(!compatibleModels.some(model=>model.model_id===node.model))s.updateNode(node.id,{model:compatibleModels[0].model_id});
+    const current=useCanvas.getState().nodes.find(item=>item.id===node.id);
+    if(current&&!current.model)s.updateNode(node.id,{model:compatibleModels[0].model_id},false);
   },[generationKind,modelCatalog.length,compatibleModels,node.id,node.model,s]);
   const selectedCatalogModel=modelCatalog.find(model=>model.model_id===node.model);
   const selectedParameters=selectedCatalogModel?.capabilities?.parameters;
@@ -1056,7 +1057,7 @@ function NodeView({
   const voiceNeedle=voiceSearch.trim().toLocaleLowerCase("zh-CN");
   const matchingVoiceProfiles=voiceProfiles.filter(item=>!voiceNeedle||`${item.projectName} ${item.name} ${item.voiceId}`.toLocaleLowerCase("zh-CN").includes(voiceNeedle));
   const voiceGroups=Object.entries(matchingVoiceProfiles.reduce<Record<string,VoiceProfile[]>>((groups,item)=>{(groups[item.projectName]||=[]).push(item);return groups;},{}));
-  const currentCompatibility=selectedCatalogModel?modelCompatibility(selectedCatalogModel,inputCounts):{compatible:true,reason:""};
+  const currentCompatibility=selectedCatalogModel?modelCompatibility(selectedCatalogModel,inputCounts):modelCatalog.length?{compatible:false,reason:"当前模型不在可用目录中，请重新选择"}:{compatible:true,reason:""};
   useEffect(()=>{
     if(node.kind==="audio-gen")return;
     const patch:Partial<CanvasNode>={};
@@ -1655,6 +1656,7 @@ function NodeView({
             <label className="min-w-0">
               <span className="mb-1 block text-(--muted)">模型</span>
               <select aria-label="模型" className="field min-w-0 w-full" value={node.model||(node.kind==="image-gen"?"zhenzhen-image-g-v2.5-lowprice":node.kind==="video-gen"?"seedance-2.5-standard-t2v":"doubao-seed-audio-1.0")} onChange={e=>{setVoiceSearch("");s.updateNode(node.id,{model:e.target.value,voice:undefined,voiceName:undefined})}}>
+                {node.model&&modelCatalog.length>0&&!compatibleModels.some(model=>model.model_id===node.model)&&<option value={node.model} disabled>{selectedCatalogModel?.display_name||node.model} · 当前选择（输入不匹配或不可用）</option>}
                 <CatalogOptions models={modelCatalog} kind={generationKind!} counts={inputCounts}/>
               </select>
             </label>
@@ -1665,7 +1667,7 @@ function NodeView({
           </div>
           {supportsVoice&&<div className="mt-3">{isVoiceClone?<div className="grid gap-2"><label className="block"><span className="mb-1 block text-(--muted)">音色名称</span><BufferedInput ariaLabel="音色名称" maxLength={80} className="field" value={node.voiceName||""} placeholder="例如：旁白女声" onCommit={voiceName=>s.updateNode(node.id,{voiceName,...(!node.voice?{voice:`voice_${crypto.randomUUID().replaceAll("-","").slice(0,24)}`}:{})})}/></label><label className="block"><span className="mb-1 block text-(--muted)">音色 ID</span><BufferedInput ariaLabel="音色 ID" maxLength={160} className="field font-mono text-[11px]" value={node.voice||""} placeholder="填写名称后自动生成" onCommit={voice=>s.updateNode(node.id,{voice:voice.replace(/[^\w.-]/g,"_")})}/></label><p className="text-[10px] leading-4 text-(--muted)">克隆成功后保存到你的个人音色库，并按当前项目名称分类；克隆音色若 7 天未被语音生成使用，会被云端自动删除，每次使用会重新计时。</p></div>:<div className="grid gap-2">{node.model?.includes("speech-2.8")&&voiceProfiles.length>0&&<input aria-label="搜索个人音色" className="field" value={voiceSearch} placeholder="搜索项目名称或音色名称" onChange={e=>setVoiceSearch(e.target.value)}/>}<label className="block"><span className="mb-1 block text-(--muted)">选择音色</span><select aria-label="音色" className="field w-full" value={node.voice||""} onChange={e=>{setVoiceSearch("");s.updateNode(node.id,{voice:e.target.value||undefined})}}><option value="">{requiresVoice?"请选择音色":"自动选择"}</option>{presetVoices.length>0&&<optgroup label="预设音色">{presetVoices.map(voice=><option key={voice.id} value={voice.id}>{voice.label}</option>)}</optgroup>}{node.model?.includes("speech-2.8")&&voiceGroups.map(([project,voices])=><optgroup key={project} label={project}>{voices.map(voice=><option key={voice.id} value={voice.voiceId}>{voice.name}{voiceExpiry(voice)?.expired?"（已过期）":""}</option>)}</optgroup>)}{node.voice&&![...presetVoices.map(item=>item.id),...matchingVoiceProfiles.map(item=>item.voiceId)].includes(node.voice)&&<option value={node.voice}>{voiceProfiles.find(item=>item.voiceId===node.voice)?.name||node.voice} · 当前选择</option>}</select></label>{node.model?.includes("speech-2.8")&&voiceProfiles.length>0&&<p className="text-[10px] text-(--muted)">{voiceNeedle?`找到 ${matchingVoiceProfiles.length} 个个人音色`:`个人音色 ${voiceProfiles.length} 个 · 已按项目分组`}</p>}</div>}<p className="mt-1 text-[10px] leading-4 text-(--muted)"><a href="https://api.seedance.nz/docs/" target="_blank" rel="noreferrer" className="underline">查看音频模型文档</a></p></div>}
           {node.kind==="audio-gen"&&audioInputCount===0&&<p className="mt-2 rounded-lg bg-[#f3e8ff] px-3 py-2 text-[10px] leading-4 text-[#6d28d9]">将一段语音或截取片段连接到此节点后，模型列表会显示 MiniMax Voice Clone；克隆模型仅接受 1 段音频。</p>}
-          {selectedCatalogModel&&<p className="mt-2 text-[10px] text-(--muted)">{selectedCatalogModel.capabilities?.category_label}{currentCompatibility.reason?` · ${currentCompatibility.reason}`:""}</p>}
+          {(selectedCatalogModel||currentCompatibility.reason)&&<p className="mt-2 text-[10px] text-(--muted)">{selectedCatalogModel?.capabilities?.category_label}{currentCompatibility.reason?` · ${currentCompatibility.reason}`:""}</p>}
           {(node.kind!=="audio-gen"||genInputItems.length>0)&&<div className="mt-2">
             <div className="mb-1 text-[10px] text-(--muted)">输入素材 · 当前条件会自动筛选可用模型</div>
             <div className="flex flex-wrap gap-1.5">{node.kind!=="audio-gen"&&<label aria-label="上传参考图" title="上传参考图" className="grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-lg border border-dashed border-(--muted) text-(--muted) transition hover:border-(--accent) hover:bg-(--accent-tint) hover:text-(--accent)"><Plus size={19}/><input type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)void loadFile(f,"reference");e.currentTarget.value=""}}/></label>}{genInputItems.map(item=>(
