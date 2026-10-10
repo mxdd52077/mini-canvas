@@ -353,83 +353,86 @@ function PromptReferenceInput({value,onCommit,refs,onRefsChange,candidates,onUpl
   onUpload:(file:File)=>Promise<PromptRef|null>;
   fontSize:number;
 }){
-  const ref=useRef<HTMLTextAreaElement|null>(null);
+  const editorRef=useRef<HTMLDivElement|null>(null);
+  const fileRef=useRef<HTMLInputElement|null>(null);
   const timer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const pending=useRef(value);
-  const fileRef=useRef<HTMLInputElement|null>(null);
-  const mirrorRef=useRef<HTMLDivElement|null>(null);
-  const [picker,setPicker]=useState<{start:number;filter:string}|null>(null);
-  const [pickerPos,setPickerPos]=useState<{left:number;top:number}>({left:0,top:0});
-  const [uploading,setUploading]=useState(false);
-  const commit=()=>{if(timer.current){clearTimeout(timer.current);timer.current=null;}onCommit(pending.current);};
-  useEffect(()=>{const element=ref.current;if(element&&document.activeElement!==element){element.value=value;pending.current=value;}},[value]);
-  useEffect(()=>()=>{if(timer.current)clearTimeout(timer.current);},[]);
-  const available=candidates.filter(item=>!refs.some(r=>r.src===item.src));
-  const filtered=picker?available.filter(item=>!picker.filter||item.name.toLocaleLowerCase("zh-CN").includes(picker.filter.toLocaleLowerCase("zh-CN"))):[];
-  // 镜像 div 测量 @ 符号在 textarea 里的坐标，下拉框锚定到符号旁边
-  const measure=(element:HTMLTextAreaElement,index:number)=>{
-    const mirror=mirrorRef.current;
-    if(!mirror)return{left:0,top:0};
-    const style=getComputedStyle(element);
-    mirror.style.font=style.font;
-    mirror.style.padding=style.padding;
-    mirror.style.width=`${element.clientWidth}px`;
-    mirror.style.lineHeight=style.lineHeight;
-    mirror.style.letterSpacing=style.letterSpacing;
-    mirror.textContent=element.value.slice(0,index);
-    const marker=document.createElement("span");
-    mirror.appendChild(marker);
-    const lineHeight=parseFloat(style.lineHeight)||18;
-    return{left:Math.max(0,Math.min(marker.offsetLeft,element.clientWidth-232)),top:marker.offsetTop-element.scrollTop+lineHeight+4};
+  const pickerRange=useRef<Range|null>(null);
+  const [picker,setPicker]=useState<{filter:string;left:number;top:number}|null>(null);
+  const [uploading,setUploading]=useState(false),[error,setError]=useState("");
+  const textOf=(root:Node):string=>{
+    if(root.nodeType===Node.TEXT_NODE)return root.textContent||"";
+    if(root instanceof HTMLElement&&root.dataset.promptMention)return root.dataset.promptMention;
+    if(root instanceof HTMLBRElement)return "\n";
+    return Array.from(root.childNodes).map((child,index)=>`${index>0&&child instanceof HTMLDivElement?"\n":""}${textOf(child)}`).join("");
   };
-  const track=(element:HTMLTextAreaElement)=>{
-    const cursor=element.selectionStart??element.value.length;
-    const before=element.value.slice(0,cursor);
-    const at=before.lastIndexOf("@");
-    if(at>=0&&!/[\s@]/.test(before.slice(at+1))){
-      setPicker({start:at,filter:before.slice(at+1)});
-      setPickerPos(measure(element,at));
+  const chip=(item:PromptRef)=>{
+    const element=document.createElement("span");element.contentEditable="false";
+    element.dataset.promptMention=`@${item.name}`;element.dataset.refId=item.id;
+    element.className="inline-flex max-w-full items-center gap-1 rounded-md bg-(--accent-tint) px-1 py-0.5 align-middle text-(--ink)";
+    element.title=item.name;
+    const at=document.createElement("span");at.textContent="@";
+    const image=document.createElement("img");image.src=item.src;image.alt=item.name;image.draggable=false;image.width=24;image.height=24;image.className="inline-block h-6 w-6 rounded object-cover";
+    const name=document.createElement("span");name.textContent=item.name;name.className="max-w-28 truncate";
+    element.appendChild(at);element.appendChild(image);element.appendChild(name);return element;
+  };
+  const renderValue=()=>{
+    const editor=editorRef.current;if(!editor)return;
+    const fragment=document.createDocumentFragment();let index=0;
+    const choices=[...refs].sort((a,b)=>b.name.length-a.name.length);
+    while(index<value.length){
+      const at=value.indexOf("@",index);
+      if(at<0){fragment.append(document.createTextNode(value.slice(index)));break;}
+      if(at>index)fragment.append(document.createTextNode(value.slice(index,at)));
+      const item=choices.find(item=>value.startsWith(`@${item.name}`,at));
+      if(item){fragment.append(chip(item));index=at+item.name.length+1;}
+      else{fragment.append(document.createTextNode("@"));index=at+1;}
     }
-    else setPicker(null);
+    editor.replaceChildren(fragment);pending.current=value;
+  };
+  useEffect(()=>{if(document.activeElement!==editorRef.current&&!picker&&!uploading)renderValue();},[value,refs,picker,uploading]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>()=>{if(timer.current)clearTimeout(timer.current);},[]);
+  const commit=()=>{if(timer.current){clearTimeout(timer.current);timer.current=null;}onCommit(pending.current);};
+  const sync=()=>{
+    const editor=editorRef.current;if(!editor)return;
+    pending.current=editor.textContent?textOf(editor):"";
+    if(!pending.current)editor.replaceChildren();
+    const ids=new Set(Array.from(editor.querySelectorAll<HTMLElement>("[data-ref-id]")).map(item=>item.dataset.refId));
+    if(refs.some(item=>!ids.has(item.id)))onRefsChange(refs.filter(item=>ids.has(item.id)));
+    if(timer.current)clearTimeout(timer.current);timer.current=setTimeout(commit,140);
+  };
+  const track=()=>{
+    const editor=editorRef.current,selection=window.getSelection();
+    if(!editor||!selection?.rangeCount||!selection.isCollapsed){setPicker(null);return;}
+    const range=selection.getRangeAt(0),container=range.startContainer;
+    if(container.nodeType!==Node.TEXT_NODE||!editor.contains(container)){setPicker(null);return;}
+    const before=(container.textContent||"").slice(0,range.startOffset),at=before.lastIndexOf("@");
+    if(at<0||/[\s@]/.test(before.slice(at+1))){setPicker(null);return;}
+    const mention=range.cloneRange();mention.setStart(container,at);pickerRange.current=mention;
+    const marker=mention.getBoundingClientRect(),box=editor.getBoundingClientRect();
+    setPicker({filter:before.slice(at+1),left:Math.max(0,Math.min(marker.left-box.left,box.width-224)),top:marker.bottom-box.top+4});
   };
   const insert=(item:PromptRef)=>{
-    const element=ref.current;
-    if(!element||!picker)return;
-    const cursor=element.selectionStart??element.value.length;
-    const next=`${element.value.slice(0,picker.start)}@${item.name} ${element.value.slice(cursor)}`;
-    element.value=next;
-    pending.current=next;
-    const pos=picker.start+item.name.length+2;
-    element.setSelectionRange(pos,pos);
-    onRefsChange([...refs,item]);
-    setPicker(null);
-    commit();
+    const editor=editorRef.current,range=pickerRange.current;if(!editor||!range||!editor.contains(range.startContainer))return;
+    range.deleteContents();const token=chip(item),space=document.createTextNode(" ");
+    const fragment=document.createDocumentFragment();fragment.append(token,space);range.insertNode(fragment);
+    range.setStartAfter(space);range.collapse(true);editor.focus();const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);
+    pending.current=textOf(editor);if(!refs.some(ref=>ref.id===item.id))onRefsChange([...refs,item]);
+    setPicker(null);commit();
   };
-  const upload=async(file:File)=>{
-    setUploading(true);
-    try{const item=await onUpload(file);if(item)insert(item);}
-    finally{setUploading(false);}
-  };
+  const filtered=picker?candidates.filter(item=>!picker.filter||item.name.toLocaleLowerCase("zh-CN").includes(picker.filter.toLocaleLowerCase("zh-CN"))):[];
+  const upload=async(file:File)=>{setUploading(true);setError("");try{const item=await onUpload(file);if(item)insert(item);}catch(value){setError(value instanceof Error?value.message:"参考图上传失败");}finally{setUploading(false);}};
   return <div className="relative">
-    <textarea ref={ref} defaultValue={value} style={{fontSize}} className="field min-h-20 w-full" aria-label="生成提示词" placeholder="描述要生成的内容，输入 @ 引用参考图" onChange={e=>{pending.current=e.target.value;track(e.target);if(timer.current)clearTimeout(timer.current);timer.current=setTimeout(commit,140);}} onBlur={commit} onKeyDown={e=>{if(e.key==="Escape"&&picker){setPicker(null);e.stopPropagation();}}}/>
-    <div ref={mirrorRef} aria-hidden className="pointer-events-none invisible absolute left-0 top-0 whitespace-pre-wrap break-words"/>
-    {picker&&<div className="absolute z-40 max-h-48 w-56 overflow-auto rounded-lg border border-(--line) bg-white p-1 shadow-xl" style={{left:pickerPos.left,top:pickerPos.top}}>
-      {filtered.map(item=><button key={item.id} type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-(--accent-tint)" onMouseDown={e=>e.preventDefault()} onClick={()=>insert(item)}>
-        <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded"><Image src={item.src} alt={item.name} fill sizes="32px" unoptimized className="object-cover"/></span>
-        <span className="min-w-0 flex-1 truncate">{item.name}</span>
+    <div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="生成提示词" data-placeholder="描述要生成的内容，输入 @ 引用参考图" style={{fontSize}} className="field min-h-20 w-full whitespace-pre-wrap break-words empty:before:pointer-events-none empty:before:text-(--muted) empty:before:content-[attr(data-placeholder)]" onInput={()=>{sync();track();}} onClick={track} onKeyUp={track} onBlur={commit} onKeyDown={event=>{if(event.key==="Escape"&&picker){setPicker(null);event.stopPropagation();}}} onPaste={event=>{event.preventDefault();const selection=window.getSelection();if(!selection?.rangeCount)return;const range=selection.getRangeAt(0);range.deleteContents();const text=document.createTextNode(event.clipboardData.getData("text/plain"));range.insertNode(text);range.setStartAfter(text);range.collapse(true);selection.removeAllRanges();selection.addRange(range);sync();track();}}/>
+    {picker&&<div className="absolute z-40 max-h-48 w-56 overflow-auto rounded-lg border border-(--line) bg-white p-1 shadow-xl" style={{left:picker.left,top:picker.top}}>
+      {filtered.map(item=><button key={item.id} type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-(--accent-tint)" onMouseDown={event=>event.preventDefault()} onClick={()=>insert(item)}>
+        <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded"><Image src={item.src} alt={item.name} fill sizes="32px" unoptimized className="object-cover"/></span><span className="min-w-0 flex-1 truncate">{item.name}</span>
       </button>)}
-      <button type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-(--muted) hover:bg-(--accent-tint) disabled:opacity-50" disabled={uploading} onMouseDown={e=>e.preventDefault()} onClick={()=>fileRef.current?.click()}>
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded border border-dashed"><Plus size={14}/></span>
-        {uploading?"上传中…":"上传新图片"}
-      </button>
-      {picker.filter.length>0&&filtered.length===0&&<p className="px-2 py-1 text-[10px] text-(--muted)">没有匹配的参考图</p>}
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)void upload(f);e.currentTarget.value="";}}/>
+      <button type="button" disabled={uploading} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-(--muted) hover:bg-(--accent-tint) disabled:opacity-50" onMouseDown={event=>event.preventDefault()} onClick={()=>fileRef.current?.click()}><Plus size={14}/>{uploading?"上传中…":"上传新图片"}</button>
+      {picker.filter&&filtered.length===0&&<p className="px-2 py-1 text-[10px] text-(--muted)">没有匹配的参考图</p>}
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={event=>{const file=event.target.files?.[0];if(file)void upload(file);event.currentTarget.value="";}}/>
     </div>}
-    {refs.length>0&&<div className="mt-1.5 flex flex-wrap gap-1.5">{refs.map(item=><span key={item.id} className="flex items-center gap-1 rounded-lg border border-(--line) bg-(--bg) py-0.5 pl-0.5 pr-1.5 text-[10px]">
-      <span className="relative h-6 w-6 overflow-hidden rounded"><Image src={item.src} alt={item.name} fill sizes="24px" unoptimized className="object-cover"/></span>
-      <span className="max-w-20 truncate">{item.name}</span>
-      <button type="button" aria-label={`移除参考图${item.name}`} className="text-(--muted) hover:text-[#b44]" onClick={()=>onRefsChange(refs.filter(r=>r.id!==item.id))}><X size={10}/></button>
-    </span>)}</div>}
+    {error&&<p role="alert" className="mt-1 text-xs text-red-600">{error}</p>}
   </div>;
 }
 const isNodeKind = (t: Tool): t is Exclude<NodeKind, "path"> =>
@@ -2592,6 +2595,7 @@ export function CanvasEditor({ projectId }: { projectId: string }) {
   },[]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      if(e.target instanceof HTMLElement&&e.target.isContentEditable)return;
       const k = e.key?.toLowerCase?.() ?? "";
       if ((e.ctrlKey || e.metaKey) && k === "z") {
         e.preventDefault();
