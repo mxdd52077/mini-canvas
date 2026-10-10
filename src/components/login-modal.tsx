@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { ArrowRight, X } from "lucide-react";
 import { Logo } from "@/components/logo";
-import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
+import { createClient, hasBackendConfig } from "@/lib/backend/client";
 import { useAuthUI } from "@/lib/auth-ui";
 
 export function LoginModal() {
@@ -14,7 +14,7 @@ export function LoginModal() {
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!hasSupabaseConfig) {
+    if (!hasBackendConfig) {
       closeLogin();
       onSuccess?.();
       return;

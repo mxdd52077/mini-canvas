@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 import { canEditProject } from "@/lib/project-access";
 
 type Context={params:Promise<{id:string;commentId:string}>};
 const patchInput=z.object({x:z.number().finite(),y:z.number().finite(),objectId:z.string().min(1).max(64).nullable().optional()});
 export async function PATCH(request:Request,{params}:Context){
   const {id,commentId}=await params,supabase=await createClient();
-  if(!supabase)return NextResponse.json({error:"Supabase 尚未配置"},{status:503});
+  if(!supabase)return NextResponse.json({error:"Cloudflare 后端尚未配置"},{status:503});
   const {data:{user}}=await supabase.auth.getUser();
   if(!user)return NextResponse.json({error:"请先登录"},{status:401});
   const parsed=patchInput.safeParse(await request.json().catch(()=>null));
@@ -21,7 +21,7 @@ export async function PATCH(request:Request,{params}:Context){
 }
 export async function DELETE(_request:Request,{params}:Context){
   const {id,commentId}=await params,supabase=await createClient();
-  if(!supabase)return NextResponse.json({error:"Supabase 尚未配置"},{status:503});
+  if(!supabase)return NextResponse.json({error:"Cloudflare 后端尚未配置"},{status:503});
   const {data:{user}}=await supabase.auth.getUser();
   if(!user)return NextResponse.json({error:"请先登录"},{status:401});
   const existing=await supabase.from("comments").select("author_id").eq("id",commentId).eq("project_id",id).is("resolved_at",null).maybeSingle();

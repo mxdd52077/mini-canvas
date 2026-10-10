@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const supabase = await createClient();
-  if (!supabase) return NextResponse.json({ error: "未配置 Supabase" }, { status: 503 });
+  if (!supabase) return NextResponse.json({ error: "Cloudflare 后端尚未配置" }, { status: 503 });
   const { data, error } = await supabase
     .from("model_configs")
     .select("id,model_id,display_name,kind,capabilities,pricing,updated_at,provider_configs!inner(slug,name,enabled)")

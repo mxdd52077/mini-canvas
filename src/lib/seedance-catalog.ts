@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/backend/server";
 
 const PRICING_URL = "https://api.seedance.nz/api/pricing";
 
@@ -158,12 +158,6 @@ function categoryOf(kind: CatalogKind, modelName: string, description: string, t
   return ["text_to_video", "文生视频"] as const;
 }
 
-function serviceClient() {
-  const url = process.env.SUPABASE_INTERNAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY;
-  if (!url || !key) throw new Error("服务端尚未配置 Supabase 管理密钥");
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
 
 export async function syncSeedanceCatalog() {
   const response = await fetch(PRICING_URL, {
@@ -175,7 +169,7 @@ export async function syncSeedanceCatalog() {
   const payload = (await response.json()) as PricingPayload;
   if (payload.success === false || !Array.isArray(payload.data)) throw new Error("Seedance 价格接口数据格式无效");
 
-  const supabase = serviceClient();
+  const supabase = await createServiceClient();
   const { data: provider, error: providerError } = await supabase
     .from("provider_configs")
     .select("id")

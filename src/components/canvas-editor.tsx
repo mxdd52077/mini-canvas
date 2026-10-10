@@ -57,7 +57,7 @@ import {
 import { useCanvas } from "@/store/canvas";
 import { useAssistantUI } from "@/store/assistant";
 import { StoryboardFlow } from "@/components/storyboard-flow";
-import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+import { createClient as createSupabaseClient } from "@/lib/backend/client";
 import { authFetch, ensureLogin, useAuthUI } from "@/lib/auth-ui";
 import type { CanvasComment, CanvasEdge, CanvasNode, NodeKind, Tool } from "@/lib/types";
 import { nearbyFreePosition, organizeMediaPositions } from "@/lib/graph";
@@ -754,7 +754,7 @@ const captureVideoFrame=async(src:string,at:FrameAt,currentTime:number)=>{
 type UploadAssetKind="image"|"video"|"audio";
 const uploadAssetBlob=async(projectId:string,blob:Blob,filename:string,kind:UploadAssetKind)=>{
   const client=createSupabaseClient();
-  if(!client)throw new Error("请先配置 Supabase 存储");
+  if(!client)throw new Error("Cloudflare 素材存储尚未配置");
   const {data:{session},error:sessionError}=await client.auth.getSession();
   const user=session?.user;
   if(sessionError||!user){requireLogin();throw new Error("请先登录");}
@@ -1232,7 +1232,7 @@ function NodeView({
   const loadFile = async (file: File, field: "src" | "reference") => {
     setGenerationError("");
     const client=createSupabaseClient();
-    if(!client){setGenerationError("请先配置 Supabase 存储");return;}
+    if(!client){setGenerationError("Cloudflare 素材存储尚未配置");return;}
     const {data:{session},error:sessionError}=await client.auth.getSession();
     const user=session?.user;
     if(sessionError||!user){requireLogin();return;}
@@ -2622,7 +2622,7 @@ export function CanvasEditor({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!sceneReady || !me) return;
     const url =
-      process.env.NEXT_PUBLIC_COLLABORATION_URL || "ws://localhost:8787";
+      `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/collaboration`;
     let ws: WebSocket | undefined;
     let projectVersion = 0;
     let inFlight = false;
@@ -2735,6 +2735,7 @@ export function CanvasEditor({ projectId }: { projectId: string }) {
           setPeers((current) => current[message.user]
             ? { ...current, [message.user]: { ...current[message.user], selection: Array.isArray(message.nodes) ? message.nodes : [] } }
             : current);
+        if (message.type === "comment-refresh") { void fetch(`/api/projects/${projectId}/comments`).then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error||"Comment sync failed");return data;}).then(data=>{if(Array.isArray(data.comments))useCanvas.getState().setComments(data.comments);}).catch(error=>setCommentError(error instanceof Error?error.message:"评论同步失败")); }
         if (message.type === "comment") {
           const st = useCanvas.getState();
           if (message.action === "add" && message.comment && !st.comments.some((c) => c.id === message.comment.id)) st.addComment(message.comment);

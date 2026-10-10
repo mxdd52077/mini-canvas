@@ -1,12 +1,13 @@
+import type { Row } from "@/lib/backend/types";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 
 type Context = { params: Promise<{ voiceId: string }> };
 
 const renameInput = z.object({ name: z.string().trim().min(1).max(80) });
 
-const mapVoice = (row: { id: string; project_id: string | null; project_name: string; name: string; voice_id: string; source_model: string; last_used_at: string | null; created_at: string; updated_at: string }) => ({
+const mapVoice = (row: Row) => ({
   id: row.id,
   projectId: row.project_id,
   projectName: row.project_name,
@@ -23,7 +24,7 @@ export async function PATCH(request: Request, { params }: Context) {
   const parsed = renameInput.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "音色名称无效" }, { status: 400 });
   const supabase = await createClient();
-  if (!supabase) return NextResponse.json({ error: "Supabase 尚未配置" }, { status: 503 });
+  if (!supabase) return NextResponse.json({ error: "Cloudflare 后端尚未配置" }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
   const { data, error } = await supabase
@@ -40,7 +41,7 @@ export async function PATCH(request: Request, { params }: Context) {
 export async function DELETE(_request: Request, { params }: Context) {
   const { voiceId } = await params;
   const supabase = await createClient();
-  if (!supabase) return NextResponse.json({ error: "Supabase 尚未配置" }, { status: 503 });
+  if (!supabase) return NextResponse.json({ error: "Cloudflare 后端尚未配置" }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
   const { data, error } = await supabase

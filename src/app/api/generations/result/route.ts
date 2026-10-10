@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 import { canEditProject } from "@/lib/project-access";
 import { queryGeneration } from "@/lib/generation";
 

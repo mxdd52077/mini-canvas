@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 export async function canEditProject(projectId:string){
   const supabase=await createClient();if(!supabase)return false;
   const {data:{user}}=await supabase.auth.getUser();if(!user)return false;

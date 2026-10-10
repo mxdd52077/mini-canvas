@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 
 type Context={params:Promise<{id:string}>};
 const input=z.object({x:z.number().finite(),y:z.number().finite(),body:z.string().trim().min(1).max(5000),color:z.string().regex(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/).optional(),objectId:z.string().min(1).max(64).nullable().optional()});
 
 export async function GET(_request:Request,{params}:Context){
   const {id}=await params,supabase=await createClient();
-  if(!supabase)return NextResponse.json({error:"Supabase 尚未配置"},{status:503});
+  if(!supabase)return NextResponse.json({error:"Cloudflare 后端尚未配置"},{status:503});
   const {data:{user}}=await supabase.auth.getUser();
   if(!user)return NextResponse.json({error:"请先登录"},{status:401});
   const project=await supabase.from("projects").select("id").eq("id",id).maybeSingle();
@@ -25,7 +25,7 @@ export async function GET(_request:Request,{params}:Context){
 
 export async function POST(request:Request,{params}:Context){
   const {id}=await params,supabase=await createClient();
-  if(!supabase)return NextResponse.json({error:"Supabase 尚未配置"},{status:503});
+  if(!supabase)return NextResponse.json({error:"Cloudflare 后端尚未配置"},{status:503});
   const {data:{user}}=await supabase.auth.getUser();
   if(!user)return NextResponse.json({error:"请先登录"},{status:401});
   const parsed=input.safeParse(await request.json().catch(()=>null));

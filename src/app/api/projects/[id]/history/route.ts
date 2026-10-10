@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 import { hydrateSceneImageUrls } from "@/lib/scene-storage";
 
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Context) {
   const { id } = await params, supabase = await createClient();
-  if (!supabase) return NextResponse.json({ error: "Supabase 尚未配置" }, { status: 503 });
+  if (!supabase) return NextResponse.json({ error: "Cloudflare 后端尚未配置" }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
   const { data: member } = await supabase

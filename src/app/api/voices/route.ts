@@ -1,6 +1,7 @@
+import type { Row } from "@/lib/backend/types";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 import { canEditProject } from "@/lib/project-access";
 
 const voiceInput=z.object({
@@ -12,7 +13,7 @@ const voiceInput=z.object({
 
 const VOICE_EXPIRY_MS=7*24*3600*1000;
 
-const mapVoice=(row:{id:string;project_id:string|null;project_name:string;name:string;voice_id:string;source_model:string;last_used_at:string|null;created_at:string;updated_at:string})=>({
+const mapVoice=(row:Row)=>({
   id:row.id,
   projectId:row.project_id,
   projectName:row.project_name,
@@ -26,7 +27,7 @@ const mapVoice=(row:{id:string;project_id:string|null;project_name:string;name:s
 
 export async function GET(){
   const supabase=await createClient();
-  if(!supabase)return NextResponse.json({error:"Supabase 尚未配置"},{status:503});
+  if(!supabase)return NextResponse.json({error:"Cloudflare 后端尚未配置"},{status:503});
   const{data:{user}}=await supabase.auth.getUser();
   if(!user)return NextResponse.json({error:"请先登录"},{status:401});
   // MiniMax 克隆音色 7 天未使用会被云端删除，本地记录随读取惰性清理
@@ -43,7 +44,7 @@ export async function POST(request:Request){
   const{projectId,name,voiceId,sourceModel}=parsed.data;
   if(!await canEditProject(projectId))return NextResponse.json({error:"无权编辑此项目"},{status:403});
   const supabase=await createClient();
-  if(!supabase)return NextResponse.json({error:"Supabase 尚未配置"},{status:503});
+  if(!supabase)return NextResponse.json({error:"Cloudflare 后端尚未配置"},{status:503});
   const{data:{user}}=await supabase.auth.getUser();
   if(!user)return NextResponse.json({error:"请先登录"},{status:401});
   const project=await supabase.from("projects").select("name").eq("id",projectId).single();

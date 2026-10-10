@@ -3,7 +3,7 @@ import { z } from "zod";
 import { submitGeneration, queryGeneration } from "@/lib/generation";
 import { modelCompatibility } from "@/lib/model-compatibility";
 import { canEditProject } from "@/lib/project-access";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 
 const mediaKind = z.enum(["image", "video", "audio"]);
 const input = z.object({
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "无权编辑此项目" }, { status: 403 });
 
     const supabase = await createClient();
-    if (!supabase) return NextResponse.json({ error: "未配置 Supabase" }, { status: 503 });
+    if (!supabase) return NextResponse.json({ error: "Cloudflare 后端尚未配置" }, { status: 503 });
     const { data: model, error: modelError } = await supabase
       .from("model_configs")
       .select("model_id,kind,capabilities,provider_configs!inner(slug,enabled)")
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     if (!model) return NextResponse.json({ error: "模型不存在或已停用" }, { status: 400 });
 
     const references = data.references || [];
-    const compatibility = modelCompatibility(model, {
+    const compatibility = modelCompatibility({...model,model_id:String(model.model_id),kind:model.kind}, {
       image: references.filter((item) => item.kind === "image").length,
       video: references.filter((item) => item.kind === "video").length,
       audio: references.filter((item) => item.kind === "audio").length,

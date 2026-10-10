@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 
 type Context={params:Promise<{id:string;commentId:string}>};
 export async function POST(request:Request,{params}:Context){
   const {id,commentId}=await params,supabase=await createClient();
-  if(!supabase)return NextResponse.json({error:"Supabase 尚未配置"},{status:503});
+  if(!supabase)return NextResponse.json({error:"Cloudflare 后端尚未配置"},{status:503});
   const {data:{user}}=await supabase.auth.getUser();
   if(!user)return NextResponse.json({error:"请先登录"},{status:401});
   const parsed=z.object({body:z.string().trim().min(1).max(5000)}).safeParse(await request.json().catch(()=>null));

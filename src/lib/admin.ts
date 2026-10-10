@@ -1,9 +1,9 @@
-import type { User } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
+import type { User } from "@/lib/backend/types";
+import { createClient } from "@/lib/backend/server";
 
 export type AppUser = User & { role: "user" | "admin"; displayName: string };
 
-/** 读取当前登录用户与 profiles.role；未登录或未配置 Supabase 返回 null。 */
+/** 读取当前登录用户与 profiles.role；未登录或Cloudflare 后端尚未配置 返回 null。 */
 export async function getAppUser(): Promise<AppUser | null> {
   const supabase = await createClient();
   if (!supabase) return null;
@@ -34,7 +34,7 @@ export async function requireAdmin(): Promise<
   const user = await getAppUser();
   if (!user) {
     const supabase = await createClient();
-    if (!supabase) return { ok: false, status: 503, error: "未配置 Supabase" };
+    if (!supabase) return { ok: false, status: 503, error: "Cloudflare 后端尚未配置" };
     return { ok: false, status: 401, error: "请先登录" };
   }
   if (user.role !== "admin") return { ok: false, status: 403, error: "需要管理员权限" };

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 type Context={params:Promise<{id:string}>};
 export async function GET(_request:Request,{params}:Context){const {id}=await params,s=await createClient();if(!s)return NextResponse.json({sessions:[]});const {data:{user}}=await s.auth.getUser();if(!user)return NextResponse.json({error:"unauthorized"},{status:401});const {data,error}=await s.from("chat_sessions").select("id,title,updated_at").eq("project_id",id).eq("user_id",user.id).order("updated_at",{ascending:false});return NextResponse.json(error?{error:error.message}:{sessions:data},{status:error?400:200})}
 export async function POST(request:Request,{params}:Context){const {id}=await params,s=await createClient();if(!s)return NextResponse.json({id:crypto.randomUUID(),demo:true});const {data:{user}}=await s.auth.getUser();if(!user)return NextResponse.json({error:"unauthorized"},{status:401});const parsed=z.object({title:z.string().max(120).default("新对话")}).safeParse(await request.json());if(!parsed.success)return NextResponse.json({error:"标题无效"},{status:400});const {data,error}=await s.from("chat_sessions").insert({project_id:id,user_id:user.id,title:parsed.data.title}).select("id,title,updated_at").single();return NextResponse.json(error?{error:error.message}:data,{status:error?400:201})}

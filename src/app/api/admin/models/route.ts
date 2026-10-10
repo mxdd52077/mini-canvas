@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export async function GET() {
   const gate = await requireAdmin();
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
   const supabase = await createClient();
-  if (!supabase) return NextResponse.json({ error: "未配置 Supabase" }, { status: 503 });
+  if (!supabase) return NextResponse.json({ error: "Cloudflare 后端尚未配置" }, { status: 503 });
 
   const [{ data: providers, error: pErr }, { data: models, error: mErr }] = await Promise.all([
     supabase.from("provider_configs").select("id,slug,name,base_url,adapter,enabled").order("name"),
@@ -38,7 +38,7 @@ export async function PATCH(req: Request) {
   const gate = await requireAdmin();
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
   const supabase = await createClient();
-  if (!supabase) return NextResponse.json({ error: "未配置 Supabase" }, { status: 503 });
+  if (!supabase) return NextResponse.json({ error: "Cloudflare 后端尚未配置" }, { status: 503 });
 
   let body: z.infer<typeof patchInput>;
   try {

@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
+import type { User } from "@/lib/backend/types";
 import { ArrowUp, Folder, Home, MessageSquare, Plus, Search, Settings, Sparkles } from "lucide-react";
 import { Logo } from "./logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ensureLogin, useAuthUI } from "@/lib/auth-ui";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/backend/client";
 
 type Project = { id: string; name: string; updated_at?: string };
 type Me = { id: string; email?: string; displayName?: string; role?: string } | null;

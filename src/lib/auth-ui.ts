@@ -1,6 +1,6 @@
 "use client";
 import { create } from "zustand";
-import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
+import { createClient, hasBackendConfig } from "@/lib/backend/client";
 
 type AuthUIState = {
   open: boolean;
@@ -18,7 +18,7 @@ export const useAuthUI = create<AuthUIState>((set) => ({
 
 /** 演示模式视为已登录；否则检查会话，未登录时弹出登录框并返回 false。 */
 export async function ensureLogin(onSuccess?: () => void): Promise<boolean> {
-  if (!hasSupabaseConfig) return true;
+  if (!hasBackendConfig) return true;
   const client = createClient();
   if (!client) return true;
   const { data: { session } } = await client.auth.getSession();

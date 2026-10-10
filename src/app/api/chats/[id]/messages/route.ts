@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/backend/server";
 type Context={params:Promise<{id:string}>};
 export async function GET(_request:Request,{params}:Context){const {id}=await params,s=await createClient();if(!s)return NextResponse.json({messages:[]});const {data:{user}}=await s.auth.getUser();if(!user)return NextResponse.json({error:"unauthorized"},{status:401});const {data,error}=await s.from("chat_messages").select("id,role,content").eq("session_id",id).order("created_at");return NextResponse.json(error?{error:error.message}:{messages:data},{status:error?400:200})}
 export async function POST(request:Request,{params}:Context){const {id}=await params,s=await createClient();if(!s)return NextResponse.json({demo:true});const {data:{user}}=await s.auth.getUser();if(!user)return NextResponse.json({error:"unauthorized"},{status:401});const parsed=z.object({role:z.enum(["user","assistant"]),text:z.string().min(1).max(20000)}).safeParse(await request.json());if(!parsed.success)return NextResponse.json({error:"消息无效"},{status:400});const {error}=await s.from("chat_messages").insert({session_id:id,role:parsed.data.role,content:{text:parsed.data.text}});return NextResponse.json(error?{error:error.message}:{ok:true},{status:error?400:201})}

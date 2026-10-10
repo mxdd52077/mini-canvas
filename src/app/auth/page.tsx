@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/logo";
-import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
+import { createClient, hasBackendConfig } from "@/lib/backend/client";
 import { safeReturnPath } from "@/lib/auth-redirect";
 export default function AuthPage() {
   const router = useRouter();
@@ -13,7 +13,7 @@ export default function AuthPage() {
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
   useEffect(() => {
-    if (!hasSupabaseConfig) return;
+    if (!hasBackendConfig) return;
     const client = createClient();
     if (!client) return;
     client.auth.getSession().then(({ data: { session } }) => {
@@ -26,7 +26,7 @@ export default function AuthPage() {
       email = String(fd.get("email")),
       password = String(fd.get("password") || "");
     const next=safeReturnPath(new URLSearchParams(window.location.search).get("next"));
-    if (!hasSupabaseConfig) {
+    if (!hasBackendConfig) {
       setNotice("演示模式：已登录，正在进入项目库…");
       setTimeout(() => router.push(next), 500);
       return;
@@ -142,9 +142,9 @@ export default function AuthPage() {
           )}
         </div>
         <p className="mt-8 text-center text-[11px] text-(--muted)">
-          {hasSupabaseConfig
+          {hasBackendConfig
             ? "Supabase 安全认证"
-            : "未配置 Supabase，当前为本地演示模式"}
+            : "Cloudflare 后端尚未配置，当前为本地演示模式"}
         </p>
         <Link href="/" className="mt-3 block text-center text-xs text-(--muted)">
           先看看演示项目

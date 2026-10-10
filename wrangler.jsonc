@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mini-canvas",
+  "compatibility_date": "2026-10-10",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main": "worker/index.ts",
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  },
+  "account_id": "300879502655b3f6e35a7c467a61aab5",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mini-canvas",
+      "database_id": "88b823b0-1522-4739-bf33-3c38d8d54383",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "mini-canvas-assets"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CANVAS_ROOMS",
+        "class_name": "CanvasRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "CanvasRoom"
+      ]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "SITE_URL": "https://mini-canvas.mxdd52077.workers.dev"
+  },
+  "workers_dev": true
+}
