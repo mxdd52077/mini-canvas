@@ -410,7 +410,8 @@ function PromptReferenceInput({value,onCommit,refs,onRefsChange,candidates,onUpl
     if(at<0||/[\s@]/.test(before.slice(at+1))){setPicker(null);return;}
     const mention=range.cloneRange();mention.setStart(container,at);pickerRange.current=mention;
     const marker=mention.getBoundingClientRect(),box=editor.getBoundingClientRect();
-    setPicker({filter:before.slice(at+1),left:Math.max(0,Math.min(marker.left-box.left,box.width-224)),top:marker.bottom-box.top+4});
+    const scale=box.width/Math.max(1,editor.offsetWidth);
+    setPicker({filter:before.slice(at+1),left:Math.max(0,Math.min((marker.left-box.left)/scale,editor.clientWidth-224)),top:(marker.bottom-box.top)/scale+4});
   };
   const insert=(item:PromptRef)=>{
     const editor=editorRef.current,range=pickerRange.current;if(!editor||!range||!editor.contains(range.startContainer))return;
