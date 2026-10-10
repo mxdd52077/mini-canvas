@@ -1,0 +1,213 @@
+name: mini-canvas-selfhost
+
+services:
+  db:
+    image: supabase/postgres:15.8.1.060
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_HOST: /var/run/postgresql
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # 必须排在镜像自带 migrate.sh / migrations 之后：角色与 auth/storage 由镜像 init 脚本创建。
+      # 文件名用 999… 前缀，确保在 migrations/*.sql 里最后执行。
+      - ./supabase/schema.sql:/docker-entrypoint-initdb.d/migrations/99999999999999_mini-canvas.sql:ro
+      - ./supabase/zz-role-passwords.sh:/docker-entrypoint-initdb.d/zz-role-passwords.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - mini-canvas
+
+  auth:
+    image: supabase/gotrue:v2.151.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}/auth/v1
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}/auth/v1
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ${SITE_URL:-http://localhost:3000},${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      GOTRUE_CORS_ALLOWED_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      GOTRUE_CORS_ALLOWED_HEADERS: Accept,Authorization,Content-Type,apikey,X-Client-Info,X-Supabase-Api-Version,X-Requested-With
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_MAILER_SUBJECTS_CONFIRMATION: 确认你的邮箱
+      GOTRUE_MAILER_SUBJECTS_INVITE: 项目邀请
+      GOTRUE_MAILER_SUBJECTS_MAGIC_LINK: 登录链接
+      GOTRUE_MAILER_SUBJECTS_RECOVERY: 重置密码
+      GOTRUE_EXTERNAL_APPLE_ENABLED: "false"
+      GOTRUE_EXTERNAL_AZURE_ENABLED: "false"
+      GOTRUE_EXTERNAL_BITBUCKET_ENABLED: "false"
+      GOTRUE_EXTERNAL_DISCORD_ENABLED: "false"
+      GOTRUE_EXTERNAL_FACEBOOK_ENABLED: "false"
+      GOTRUE_EXTERNAL_GITHUB_ENABLED: "false"
+      GOTRUE_EXTERNAL_GITLAB_ENABLED: "false"
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: "false"
+      GOTRUE_EXTERNAL_LINKEDIN_ENABLED: "false"
+      GOTRUE_EXTERNAL_NOTION_ENABLED: "false"
+      GOTRUE_EXTERNAL_SLACK_ENABLED: "false"
+      GOTRUE_EXTERNAL_SPOTIFY_ENABLED: "false"
+      GOTRUE_EXTERNAL_TWITCH_ENABLED: "false"
+      GOTRUE_EXTERNAL_TWITTER_ENABLED: "false"
+      GOTRUE_EXTERNAL_WORKOS_ENABLED: "false"
+      GOTRUE_HOOK_SEND_EMAIL_ENABLED: "false"
+      LOG_LEVEL: info
+    networks:
+      - mini-canvas
+
+  rest:
+    image: postgrest/postgrest:v12.2.3
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_OPENAPI_SERVER_PROXY_URI: ${API_EXTERNAL_URL:-http://localhost:8000}
+    networks:
+      - mini-canvas
+
+  storage:
+    image: supabase/storage-api:v1.11.13
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: postgres
+      POSTGRES_USER: supabase_storage_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      DATABASE_SEARCH_PATH: storage,public
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/data/storage
+      # storage-api 认的是 UPLOAD_FILE_SIZE_LIMIT；不设会变成 NaN，上传解析即失败
+      UPLOAD_FILE_SIZE_LIMIT: ${UPLOAD_FILE_SIZE_LIMIT:-524288000}
+      # file 后端下作为存储根目录下的子目录名；不设时 path.resolve 收到 undefined
+      GLOBAL_S3_BUCKET: ${GLOBAL_S3_BUCKET:-local-storage}
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      ANON_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?set NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env}
+      SERVICE_KEY: ${SUPABASE_SECRET_KEY:?set SUPABASE_SECRET_KEY in .env}
+      SITE_URL: ${SITE_URL:-http://localhost:3000}
+      STORAGE_BACKEND_FILE_ROOT: /var/data/storage
+    volumes:
+      - storage-data:/var/data/storage
+    networks:
+      - mini-canvas
+
+  kong:
+    image: kong:2.8.1
+    restart: unless-stopped
+    depends_on:
+      auth:
+        condition: service_started
+      rest:
+        condition: service_started
+      storage:
+        condition: service_started
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong.yml
+      KONG_DNS_RESOLVER: 127.0.0.11
+      KONG_CLIENT_BODY_SIZE: 0
+      KONG_NGINX_HTTP_PROXY_READ_TIMEOUT: 600s
+      KONG_NGINX_HTTP_PROXY_SEND_TIMEOUT: 600s
+      KONG_NGINX_HTTP_PROXY_CONNECT_TIMEOUT: 600s
+      KONG_NGINX_CLIENT_MAX_BODY_SIZE: 0
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+    volumes:
+      - ./deploy/kong.yml:/kong.yml:ro
+    ports:
+      - "${SUPABASE_API_PORT:-8000}:8000"
+    networks:
+      - mini-canvas
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/alpine}
+        HTTP_PROXY: ${BUILD_HTTP_PROXY:-}
+        HTTPS_PROXY: ${BUILD_HTTP_PROXY:-}
+        NO_PROXY: ${BUILD_NO_PROXY:-localhost,127.0.0.1}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_COLLABORATION_URL: ${NEXT_PUBLIC_COLLABORATION_URL:-ws://localhost:8787}
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      # 服务端走 Docker 内网，避免经 FRP 公网域名回环导致认证请求超时。
+      SUPABASE_INTERNAL_URL: http://kong:8000
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
+      # 邀请链接等对外 URL 用它拼，不能信 request.url（反代后是 0.0.0.0:3000）
+      SITE_URL: ${SITE_URL:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      MODEL_ENCRYPTION_KEY: ${MODEL_ENCRYPTION_KEY:-}
+      KIMI_BASE_URL: ${KIMI_BASE_URL:-https://api.seedance.nz/v1}
+      KIMI_API_KEY: ${KIMI_API_KEY:-}
+      KIMI_MODEL_ID: ${KIMI_MODEL_ID:-zhenzhen/g5.6-luna}
+      SEEDANCE_API_KEY: ${SEEDANCE_API_KEY:-}
+      VOLCENGINE_API_KEY: ${VOLCENGINE_API_KEY:-}
+      VOLCENGINE_ENDPOINT: ${VOLCENGINE_ENDPOINT:-}
+    depends_on:
+      collaboration:
+        condition: service_started
+      kong:
+        condition: service_started
+    networks:
+      - mini-canvas
+
+  collaboration:
+    build:
+      context: .
+      target: collaboration
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${COLLABORATION_PORT:-8787}:8787"
+    environment:
+      NODE_ENV: production
+      COLLABORATION_PORT: 8787
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
+      MODEL_SYNC_URL: http://web:3000/api/models/sync
+      MODEL_SYNC_INTERVAL_MS: ${MODEL_SYNC_INTERVAL_MS:-86400000}
+    networks:
+      - mini-canvas
+
+volumes:
+  db-data:
+  storage-data:
+
+networks:
+  mini-canvas:
+    driver: bridge

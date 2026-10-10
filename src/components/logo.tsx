@@ -1,0 +1,1 @@
+import Link from"next/link";export function Logo({label=true}:{label?:boolean}){return <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight"><span className="grid h-8 w-8 place-items-center rounded-full bg-(--btn) text-xs font-bold text-white">M<span className="text-(--accent-light)">•</span></span>{label&&<span>Mini Canvas</span>}</Link>}

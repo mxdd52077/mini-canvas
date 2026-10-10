@@ -1,0 +1,52 @@
+name: mini-canvas
+
+services:
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}
+        NEXT_PUBLIC_COLLABORATION_URL: ${NEXT_PUBLIC_COLLABORATION_URL:-ws://localhost:8787}
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+      MODEL_ENCRYPTION_KEY: ${MODEL_ENCRYPTION_KEY:-}
+      KIMI_BASE_URL: ${KIMI_BASE_URL:-https://api.seedance.nz/v1}
+      KIMI_API_KEY: ${KIMI_API_KEY:-}
+      KIMI_MODEL_ID: ${KIMI_MODEL_ID:-zhenzhen/g5.6-luna}
+      SEEDANCE_API_KEY: ${SEEDANCE_API_KEY:-}
+      VOLCENGINE_API_KEY: ${VOLCENGINE_API_KEY:-}
+      VOLCENGINE_ENDPOINT: ${VOLCENGINE_ENDPOINT:-}
+    depends_on:
+      collaboration:
+        condition: service_started
+    networks:
+      - mini-canvas
+
+  collaboration:
+    build:
+      context: .
+      target: collaboration
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${COLLABORATION_PORT:-8787}:8787"
+    environment:
+      NODE_ENV: production
+      COLLABORATION_PORT: 8787
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+      MODEL_SYNC_URL: http://web:3000/api/models/sync
+      MODEL_SYNC_INTERVAL_MS: ${MODEL_SYNC_INTERVAL_MS:-86400000}
+    networks:
+      - mini-canvas
+
+networks:
+  mini-canvas:
+    driver: bridge

@@ -1,0 +1,3 @@
+import{NextResponse}from"next/server";import{z}from"zod";import{runCanvasAgent}from"@/lib/pi-agent";import{canEditProject}from"@/lib/project-access";
+const body=z.object({projectId:z.uuid(),prompt:z.string().min(1).max(8000),selected:z.array(z.record(z.string(),z.unknown())).max(100).default([])});
+export async function POST(req:Request){try{const data=body.parse(await req.json());if(!await canEditProject(data.projectId))return NextResponse.json({error:"无权编辑此项目"},{status:403});return NextResponse.json(await runCanvasAgent(data.prompt,data.selected))}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"请求无效"},{status:400})}}

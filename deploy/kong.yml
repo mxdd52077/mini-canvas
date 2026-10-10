@@ -1,0 +1,52 @@
+_format_version: "2.1"
+_transform: true
+
+# 浏览器跨域：Supabase JS 会发 OPTIONS 预检，必须由 Kong 直接应答
+# Kong 2.8 CORS 字段是 origins/headers/methods/credentials（不是 allow_*）
+plugins:
+  - name: cors
+    config:
+      # credentials=true 时 origin 不能是 "*"，浏览器会拒绝
+      origins:
+        - http://localhost:3000
+        - http://localhost:3001
+      headers:
+        - Accept
+        - Authorization
+        - Content-Type
+        - apikey
+        - X-Client-Info
+        - X-Supabase-Api-Version
+        - X-Requested-With
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      credentials: true
+      max_age: 3600
+
+services:
+  - name: auth-v1
+    url: http://auth:9999
+    routes:
+      - name: auth-v1-all
+        strip_path: true
+        paths:
+          - /auth/v1/
+  - name: rest-v1
+    url: http://rest:3000
+    routes:
+      - name: rest-v1-all
+        strip_path: true
+        paths:
+          - /rest/v1/
+  - name: storage-v1
+    url: http://storage:5000
+    routes:
+      - name: storage-v1-all
+        strip_path: true
+        paths:
+          - /storage/v1/
